@@ -1,5 +1,5 @@
 # DTM-2-STL
-Turn Digital Terrain Models (DTMs) to STL files
+Turn Digital Terrain Models (DTMs) to STL files (TIFFs from Astropedia)
 
 -------
 
