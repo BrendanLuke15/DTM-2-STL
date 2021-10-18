@@ -32,7 +32,7 @@ def radiusFunc(DN): # Data Number (DN) to Radius Function (change as needed)
     return radius
 
 # Load Image of DTM (change array data type as needed)
-DTM = Image.open("C:/Users/ext-brl01021/Downloads/Phobos_ME_HRSC_DEM_Global_2ppd.tif")
+DTM = Image.open(# "path/to/file")
 DTM_Array = np.array(DTM,'int16')
 dims = DTM_Array.shape
 DTM_Array = DTM_Array[:,0:math.floor(dims[1]/2)] # putting to numpy array doubles the image horizontally (why??)
