@@ -7,62 +7,65 @@ startTime = datetime.now()
 # import modules
 import math
 import numpy as np
+#from matplotlib import image
 import matplotlib.pyplot as plt
-from matplotlib import cm
-from mpl_toolkits.mplot3d import Axes3D
 import PIL.Image as Image
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import os
 
-# relative filepaths sometimtes don't work
+# relative filepaths sometimes don't work
 dirname = os.path.dirname(__file__)
 
-# Base Body Constants
-R0 = 11100 # base 'radius' of parent body (m)
-LatRange = [-90, 90] # range of latitudes (°)
-LongRange = [-180, 180] # range of longitudes (°)
+# User Preferences
 FileName = "Phobos" # name of output STL file (DO NOT include .stl extension)
+normalize = bool(1) # boolean to select whether or not to normalize the units to max(max()) dimension, 1(T) or 0(F)
+plotShow = bool(0) # show surface plot (1/T) or not (0/F)
+OutCSV = bool(0) # output pixel data to csv (1/T) or not (0/F)
+
+# Base Body/Model Parameters
+R0 = 11100 # base 'radius' of parent body (m)
+LatRange = [90, -90] # range of latitudes (°) Top to Bottom
+LongRange = [-180, 180] # range of longitudes (°) Left to Right
+def radiusFunc(DN): # Data Number (DN) to Radius Function (change as needed)
+    radius = DN + R0
+    return radius
 
 # Load Image of DTM (change array data type as needed)
 DTM = Image.open("C:/Users/ext-brl01021/Downloads/Phobos_ME_HRSC_DEM_Global_2ppd.tif")
 DTM_Array = np.array(DTM,'int16')
-DTM_Array = np.flip(DTM_Array,0) # flip array to fix orientation
+dims = DTM_Array.shape
+DTM_Array = DTM_Array[:,0:math.floor(dims[1]/2)] # putting to numpy array doubles the image horizontally (why??)
+
+# make necessary modifications to data below
+    # description of modifications:
+    # poor data; some of last rows are zeros, creating undesirable artifacts in STL file
+    # changes to be same data from nearest valid row
+DTM_Array[dims[0]-1,:] = DTM_Array[dims[0]-3,:] 
+DTM_Array[dims[0]-2,:] = DTM_Array[dims[0]-3,:] 
+DTM_Array[dims[0]-5,:] = DTM_Array[dims[0]-4,:] 
+
+if OutCSV:
+    np.savetxt("ImgArray.csv", DTM_Array, delimiter=",")
 dims = DTM_Array.shape
 print("Image is " + str(dims) + " px")
-
-# Data Number (DN) to Radius Function (change as needed)
-def radiusFunc(DN):
-    radius = DN + R0
-    return radius
+maxDim = np.abs(DTM_Array).max()
 
 # Create collection (tuple) of cartesian points (vertices of STL)
 lat = np.linspace(LatRange[0], LatRange[1],dims[0]-1)
 long = np.linspace(LongRange[0], LongRange[1],dims[1]-1)
 xLin, yLin, zLin = [], [], [] # declare linear x,y,z (for plotting)
 x, y, z = np.zeros((len(lat),len(long))), np.zeros((len(lat),len(long))), np.zeros((len(lat),len(long))) # declare x,y,z
-rowRemove, colRemove = 0, 0#3, 1 # remove rows/columns of zeros data as needed
-startEndBool = bool(1) # remove from start(T,1) or end(F,0) of data
-for i in range(len(lat)-1-rowRemove):
-    for j in range(len(long)-1-colRemove):
-        if startEndBool: # remove from start
-            R = radiusFunc(float(DTM_Array[i+rowRemove,j+colRemove]))
-            xLin.append(R*math.cos(math.radians(lat[i]))*math.cos(math.radians(long[j])))
-            yLin.append(R*math.cos(math.radians(lat[i]))*math.sin(math.radians(long[j])))
-            zLin.append(R*math.sin(math.radians(lat[i])))
+for i in range(len(lat)-1):
+    for j in range(len(long)-1):
+        R = radiusFunc(float(DTM_Array[i,j]))
+        xLin.append(R*math.cos(math.radians(lat[i]))*math.cos(math.radians(long[j])))
+        yLin.append(R*math.cos(math.radians(lat[i]))*math.sin(math.radians(long[j])))
+        zLin.append(R*math.sin(math.radians(lat[i])))
 
-            x[i,j] = R*math.cos(math.radians(lat[i]))*math.cos(math.radians(long[j]))
-            y[i,j] = R*math.cos(math.radians(lat[i]))*math.sin(math.radians(long[j]))
-            z[i,j] = R*math.sin(math.radians(lat[i]))
-        else: # remove from end
-            R = radiusFunc(float(DTM_Array[i,j]))
-            xLin.append(R*math.cos(math.radians(lat[i]))*math.cos(math.radians(long[j])))
-            yLin.append(R*math.cos(math.radians(lat[i]))*math.sin(math.radians(long[j])))
-            zLin.append(R*math.sin(math.radians(lat[i])))
-
-            x[i,j] = R*math.cos(math.radians(lat[i]))*math.cos(math.radians(long[j]))
-            y[i,j] = R*math.cos(math.radians(lat[i]))*math.sin(math.radians(long[j]))
-            z[i,j] = R*math.sin(math.radians(lat[i]))
+        x[i,j] = R*math.cos(math.radians(lat[i]))*math.cos(math.radians(long[j]))
+        y[i,j] = R*math.cos(math.radians(lat[i]))*math.sin(math.radians(long[j]))
+        z[i,j] = R*math.sin(math.radians(lat[i]))
 
 # Create Surface Plot
 fig = plt.figure()
@@ -72,34 +75,65 @@ plt.axis('off')
 
 # Write ASCII STL File (no facet normal)
 stringOut = ["solid " + FileName] # initialize empty string to write STL file to
-for i in range(len(lat)-2-rowRemove):
-    for j in range(len(long)-2-colRemove):
+if normalize: # normalize dimensions
+    normFactor = R0+maxDim # normalization factor
+    for i in range(len(lat)-2):
+        for j in range(len(long)-2):
+            # first triangle in 1x1 px square (top left)
+            stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,j]/(normFactor), vy = y[i,j]/(normFactor), vz = z[i,j]/(normFactor)) # top left point
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,j]/(normFactor), vy = y[i+1,j]/(normFactor), vz = z[i+1,j]/(normFactor)) # bottom left point
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,j+1]/(normFactor), vy = y[i,j+1]/(normFactor), vz = z[i,j+1]/(normFactor)) # top right point
+                        +"endloop\n" + "endfacet")
+            # second triangle in 1x1 px square (bottom right)
+            stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,j+1]/(normFactor), vy = y[i+1,j+1]/(normFactor), vz = z[i+1,j+1]/(normFactor)) # bottom right point
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,j+1]/(normFactor), vy = y[i,j+1]/(normFactor), vz = z[i,j+1]/(normFactor)) # top right point
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,j]/(normFactor), vy = y[i+1,j]/(normFactor), vz = z[i+1,j]/(normFactor)) # bottom left point
+                        +"endloop\n" + "endfacet")
+        print("Rows {:.1f}".format(100*i/(len(lat)-3))+"% complete")
+    for i in range(len(lat)-2): # write end:start facets
         # first triangle in 1x1 px square (top left)
         stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
-                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,j], vy = y[i,j], vz = z[i,j]) # top left point
-                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,j], vy = y[i+1,j], vz = z[i+1,j]) # bottom left point
-                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,j+1], vy = y[i,j+1], vz = z[i,j+1]) # top right point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,len(long)-3]/(normFactor), vy = y[i,len(long)-3]/(normFactor), vz = z[i,len(long)-3]/(normFactor)) # top left point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,len(long)-3]/(normFactor), vy = y[i+1,len(long)-3]/(normFactor), vz = z[i+1,len(long)-3]/(normFactor)) # bottom left point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,0]/(normFactor), vy = y[i,0]/(normFactor), vz = z[i,0]/(normFactor)) # top right point
                     +"endloop\n" + "endfacet")
         # second triangle in 1x1 px square (bottom right)
         stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
-                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,j+1], vy = y[i+1,j+1], vz = z[i+1,j+1]) # bottom right point
-                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,j+1], vy = y[i,j+1], vz = z[i,j+1]) # top right point
-                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,j], vy = y[i+1,j], vz = z[i+1,j]) # bottom left point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,0]/(normFactor), vy = y[i+1,0]/(normFactor), vz = z[i+1,0]/(normFactor)) # bottom right point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,0]/(normFactor), vy = y[i,0]/(normFactor), vz = z[i,0]/(normFactor)) # top right point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,len(long)-3]/(normFactor), vy = y[i+1,len(long)-3]/(normFactor), vz = z[i+1,len(long)-3]/(normFactor)) # bottom left point
                     +"endloop\n" + "endfacet")
-    print("Rows {:.1f}".format(100*i/(len(lat)-3-rowRemove))+"% complete")
-for i in range(len(lat)-2-rowRemove): # write end:start facets
-    # first triangle in 1x1 px square (top left)
-    stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
-                +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,len(long)-3-colRemove], vy = y[i,len(long)-3-colRemove], vz = z[i,len(long)-3-colRemove]) # top left point
-                +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,len(long)-3-colRemove], vy = y[i+1,len(long)-3-colRemove], vz = z[i+1,len(long)-3-colRemove]) # bottom left point
-                +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,0], vy = y[i,0], vz = z[i,0]) # top right point
-                +"endloop\n" + "endfacet")
-    # second triangle in 1x1 px square (bottom right)
-    stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
-                +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,0], vy = y[i+1,0], vz = z[i+1,0]) # bottom right point
-                +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,0], vy = y[i,0], vz = z[i,0]) # top right point
-                +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,len(long)-3-colRemove], vy = y[i+1,len(long)-3-colRemove], vz = z[i+1,len(long)-3-colRemove]) # bottom left point
-                +"endloop\n" + "endfacet")
+else: # do not normalize dimensions
+    for i in range(len(lat)-2):
+        for j in range(len(long)-2):
+            # first triangle in 1x1 px square (top left)
+            stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,j], vy = y[i,j], vz = z[i,j]) # top left point
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,j], vy = y[i+1,j], vz = z[i+1,j]) # bottom left point
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,j+1], vy = y[i,j+1], vz = z[i,j+1]) # top right point
+                        +"endloop\n" + "endfacet")
+            # second triangle in 1x1 px square (bottom right)
+            stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,j+1], vy = y[i+1,j+1], vz = z[i+1,j+1]) # bottom right point
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,j+1], vy = y[i,j+1], vz = z[i,j+1]) # top right point
+                        +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,j], vy = y[i+1,j], vz = z[i+1,j]) # bottom left point
+                        +"endloop\n" + "endfacet")
+        print("Rows {:.1f}".format(100*i/(len(lat)-3))+"% complete")
+    for i in range(len(lat)-2): # write end:start facets
+        # first triangle in 1x1 px square (top left)
+        stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,len(long)-3], vy = y[i,len(long)-3], vz = z[i,len(long)-3]) # top left point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,len(long)-3], vy = y[i+1,len(long)-3], vz = z[i+1,len(long)-3]) # bottom left point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,0], vy = y[i,0], vz = z[i,0]) # top right point
+                    +"endloop\n" + "endfacet")
+        # second triangle in 1x1 px square (bottom right)
+        stringOut.append("\nfacet normal 0.0e+01 0.0e+01 0.0e+01\n" + "outer loop\n"
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,0], vy = y[i+1,0], vz = z[i+1,0]) # bottom right point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i,0], vy = y[i,0], vz = z[i,0]) # top right point
+                    +"vertex {vx:e} {vy:e} {vz:e}\n".format(vx = x[i+1,len(long)-3], vy = y[i+1,len(long)-3], vz = z[i+1,len(long)-3]) # bottom left point
+                    +"endloop\n" + "endfacet")
 stringOut.append("\nendsolid " + FileName) # close out STL data
 stringOut = ''.join(stringOut) # join list to string
 with open(dirname + "/" + FileName + ".stl", "w") as outFile:
@@ -107,4 +141,5 @@ with open(dirname + "/" + FileName + ".stl", "w") as outFile:
 
 # Stop Clock & Show Plots(s)
 print('Done! Execution took ' + str(datetime.now() - startTime))
-plt.show()
+if plotShow:
+    plt.show()
