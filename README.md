@@ -40,6 +40,6 @@ The "ridges" are an artifact from the data, not the script.
 
 Here is another example of [the Lunar south pole](https://astrogeology.usgs.gov/search/map/Moon/LRO/LOLA/Lunar_LRO_LOLA_Global_LDEM_118m_Mar2014) (1/32 resolution, 75° S):
 
-![image](https://user-images.githubusercontent.com/31905278/160266583-502572e7-1e03-4665-800e-94d6f08c4901.png)
+![image](https://user-images.githubusercontent.com/31905278/160267141-6f3d32fc-00b1-4aa4-9113-df6d75aead0b.png)
 
 You can use the attached TIFF_Reduction.m MATLAB script to reduce very large TIFFs (~GBs) to more manageable sizes. This was done for the above Lunar maps.
