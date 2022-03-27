@@ -58,7 +58,7 @@ maxDim = np.abs(DTM_Array).max()
 xLin, yLin, zLin = [], [], [] # declare linear x,y,z (for plotting)
 if (poleSquare):
     horizontalScale = R0*arc/180*math.pi # horizontal scale of view (m)
-    X, Y = np.linspace(-horizontalScale/2,horizontalScale/2,dims[0]), np.linspace(-horizontalScale/2,horizontalScale/2,dims[0])
+    X, Y = np.linspace(horizontalScale/2,-horizontalScale/2,dims[0]), np.linspace(-horizontalScale/2,horizontalScale/2,dims[0])
     arcSpan = np.linspace(-arc/2,arc/2,dims[0])
     x, y, z = np.zeros((dims[0],dims[0])), np.zeros((dims[0],dims[0])), np.zeros((dims[0],dims[0])) # declare x,y,z
     for i in range(dims[0]):
